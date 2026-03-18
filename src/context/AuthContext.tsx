@@ -1,19 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { authApi } from "@/api/authApi";
-
-interface User {
-  email: string;
-  role: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
+import { AuthContext, type User } from "./authContextDef";
 
 function getUserFromToken(): User | null {
   const token = localStorage.getItem("accessToken");
@@ -38,6 +25,7 @@ function getUserFromToken(): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(getUserFromToken);
+  const [isLoading, setIsLoading] = useState(false);
 
   const parseUser = (token: string): User => {
     const payload = JSON.parse(atob(token.split(".")[1]));
@@ -53,17 +41,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const { data } = await authApi.login({ email, password });
-    localStorage.setItem("accessToken", data.data.accessToken);
-    localStorage.setItem("refreshToken", data.data.refreshToken);
-    setUser(parseUser(data.data.accessToken));
+    setIsLoading(true);
+    try {
+      const { data } = await authApi.login({ email, password });
+      localStorage.setItem("accessToken", data.data.accessToken);
+      localStorage.setItem("refreshToken", data.data.refreshToken);
+      setUser(parseUser(data.data.accessToken));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const register = async (email: string, password: string) => {
-    const { data } = await authApi.register({ email, password });
-    localStorage.setItem("accessToken", data.data.accessToken);
-    localStorage.setItem("refreshToken", data.data.refreshToken);
-    setUser(parseUser(data.data.accessToken));
+    setIsLoading(true);
+    try {
+      const { data } = await authApi.register({ email, password });
+      localStorage.setItem("accessToken", data.data.accessToken);
+      localStorage.setItem("refreshToken", data.data.refreshToken);
+      setUser(parseUser(data.data.accessToken));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
@@ -75,14 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
 }
